@@ -10,7 +10,7 @@ import { hashPassword } from "./lib/auth";
 import type { Player, Character } from "./types";
 
 const PASSWORD_HASH = import.meta.env.VITE_PASSWORD_HASH as string;
-const INLINE_DETAIL = true;
+const SINGLE_PAGE = true;
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(
@@ -245,7 +245,7 @@ export default function App() {
     );
   }
 
-  if (!INLINE_DETAIL && detailCharacter) {
+  if (!SINGLE_PAGE && detailCharacter) {
     const playerName =
       players.find((p) => p.id === detailCharacter.player_id)?.name ?? "";
 
@@ -263,51 +263,62 @@ export default function App() {
   return (
     <div className="app">
       <div className="player-list">
-        {players.map((player) => {
-          const playerCharacters = characters.filter(
-            (c) => c.player_id === player.id,
-          );
-
-          const inlineDetailCharacter = INLINE_DETAIL
-            ? (playerCharacters.find((c) => c.id === detailCharacterId) ?? null)
-            : null;
-
-          if (inlineDetailCharacter) {
-            return (
-              <div key={player.id} className="player-row">
-                <CharacterDetail
-                  character={inlineDetailCharacter}
-                  playerName={player.name}
-                  onUpdate={updateCharacter}
-                  onBack={() => setDetailCharacterId(null)}
-                  onDelete={() => deleteCharacter(inlineDetailCharacter.id)}
-                />
-              </div>
+        {[...players]
+          .sort((a, b) => {
+            const aHasDetail = characters.some(
+              (c) => c.player_id === a.id && c.id === detailCharacterId,
             );
-          }
+            const bHasDetail = characters.some(
+              (c) => c.player_id === b.id && c.id === detailCharacterId,
+            );
+            return Number(bHasDetail) - Number(aHasDetail);
+          })
+          .map((player) => {
+            const playerCharacters = characters.filter(
+              (c) => c.player_id === player.id,
+            );
 
-          return (
-            <PlayerRow
-              key={player.id}
-              player={player}
-              characters={playerCharacters}
-              isExpanded={expandedPlayerId === player.id}
-              onToggleExpand={() =>
-                setExpandedPlayerId((prev) =>
-                  prev === player.id ? null : player.id,
-                )
-              }
-              onSelectCharacter={(charId) =>
-                setActiveCharacter(player.id, charId)
-              }
-              onEditCharacter={setDetailCharacterId}
-              onAddCharacter={(name) => addCharacter(player.id, name)}
-              onDeletePlayer={() => deletePlayer(player.id)}
-              onRenamePlayer={(name) => renamePlayer(player.id, name)}
-              onReorderCharacters={reorderCharacters}
-            />
-          );
-        })}
+            const inlineDetailCharacter = SINGLE_PAGE
+              ? (playerCharacters.find((c) => c.id === detailCharacterId) ??
+                null)
+              : null;
+
+            if (inlineDetailCharacter) {
+              return (
+                <div key={player.id} className="player-row">
+                  <CharacterDetail
+                    character={inlineDetailCharacter}
+                    playerName={player.name}
+                    onUpdate={updateCharacter}
+                    onBack={() => setDetailCharacterId(null)}
+                    onDelete={() => deleteCharacter(inlineDetailCharacter.id)}
+                  />
+                </div>
+              );
+            }
+
+            return (
+              <PlayerRow
+                key={player.id}
+                player={player}
+                characters={playerCharacters}
+                isExpanded={expandedPlayerId === player.id}
+                onToggleExpand={() =>
+                  setExpandedPlayerId((prev) =>
+                    prev === player.id ? null : player.id,
+                  )
+                }
+                onSelectCharacter={(charId) =>
+                  setActiveCharacter(player.id, charId)
+                }
+                onEditCharacter={setDetailCharacterId}
+                onAddCharacter={(name) => addCharacter(player.id, name)}
+                onDeletePlayer={() => deletePlayer(player.id)}
+                onRenamePlayer={(name) => renamePlayer(player.id, name)}
+                onReorderCharacters={reorderCharacters}
+              />
+            );
+          })}
 
         {addingPlayer ? (
           <div className="add-char-form">
