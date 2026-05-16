@@ -13,6 +13,7 @@ export interface Character {
   stress: number;
   conditions: Condition[];
   position: number;
+  trait: string | null;
   created_at?: string;
 }
 

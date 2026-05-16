@@ -30,14 +30,10 @@ interface Props {
   onReorderCharacters: (characters: Character[]) => Promise<void>;
 }
 
-function formatConditions(char: Character) {
-  return char.conditions
-    .map((c) =>
-      (c.name === "Exhausted" || c.name === "Diseased") && c.count > 1
-        ? `${c.name} ×${c.count}`
-        : c.name,
-    )
-    .join(", ");
+function conditionLabel(name: string, count: number) {
+  return (name === "Exhausted" || name === "Diseased") && count > 1
+    ? `${name} ×${count}`
+    : name;
 }
 
 function hpPillStyle(char: Character) {
@@ -49,11 +45,11 @@ function hpPillStyle(char: Character) {
   };
 }
 
-function stressPillStyle(stress: number) {
+function traitStressPillStyle(stress: number) {
   return {
-    background: stress < 100 ? "#dcfce7" : stress < 150 ? "#fef9c3" : "#fee2e2",
-    color: stress < 100 ? "#166534" : stress < 150 ? "#854d0e" : "#991b1b",
-    border: `0.5px solid ${stress < 100 ? "#86efac" : stress < 150 ? "#fde047" : "#fca5a5"}`,
+    background: stress < 50 ? "#dcfce7" : stress < 75 ? "#fef9c3" : "#fee2e2",
+    color: stress < 50 ? "#166534" : stress < 75 ? "#854d0e" : "#991b1b",
+    border: `0.5px solid ${stress < 50 ? "#86efac" : stress < 75 ? "#fde047" : "#fca5a5"}`,
   };
 }
 
@@ -110,13 +106,34 @@ function SortableCharRow({
             +{char.temp_hp} THP
           </span>
         )}
-        {char.stress > 0 && (
-          <span className="summary-pill" style={stressPillStyle(char.stress)}>
-            {char.stress} Stress
+        {(char.stress > 0 || char.trait) && (
+          <span
+            className="summary-pill"
+            style={traitStressPillStyle(char.stress)}
+          >
+            {char.trait ? `${char.trait} ` : "Stress "}
+            {char.stress}
           </span>
         )}
-        {char.conditions.length > 0 && (
-          <span className="condition-pill">{formatConditions(char)}</span>
+        {char.conditions.filter(
+          (c) => c.name === "Exhausted" || c.name === "Diseased",
+        ).length > 0 && (
+          <span className="special-pill">
+            {char.conditions
+              .filter((c) => c.name === "Exhausted" || c.name === "Diseased")
+              .map((s) => conditionLabel(s.name, s.count))
+              .join(", ")}
+          </span>
+        )}
+        {char.conditions.filter(
+          (c) => c.name !== "Exhausted" && c.name !== "Diseased",
+        ).length > 0 && (
+          <span className="condition-pill">
+            {char.conditions
+              .filter((c) => c.name !== "Exhausted" && c.name !== "Diseased")
+              .map((c) => c.name)
+              .join(", ")}
+          </span>
         )}
       </div>
 
@@ -256,17 +273,37 @@ export default function PlayerRow({
                   +{activeChar.temp_hp} THP
                 </span>
               )}
-              {activeChar.stress > 0 && (
+              {(activeChar.stress > 0 || activeChar.trait) && (
                 <span
                   className="summary-pill"
-                  style={stressPillStyle(activeChar.stress)}
+                  style={traitStressPillStyle(activeChar.stress)}
                 >
-                  {activeChar.stress} Stress
+                  {activeChar.trait ? `${activeChar.trait} ` : "Stress "}
+                  {activeChar.stress}
                 </span>
               )}
-              {activeChar.conditions.length > 0 && (
+              {activeChar.conditions.filter(
+                (c) => c.name === "Exhausted" || c.name === "Diseased",
+              ).length > 0 && (
+                <span className="special-pill">
+                  {activeChar.conditions
+                    .filter(
+                      (c) => c.name === "Exhausted" || c.name === "Diseased",
+                    )
+                    .map((s) => conditionLabel(s.name, s.count))
+                    .join(", ")}
+                </span>
+              )}
+              {activeChar.conditions.filter(
+                (c) => c.name !== "Exhausted" && c.name !== "Diseased",
+              ).length > 0 && (
                 <span className="condition-pill">
-                  {formatConditions(activeChar)}
+                  {activeChar.conditions
+                    .filter(
+                      (c) => c.name !== "Exhausted" && c.name !== "Diseased",
+                    )
+                    .map((c) => c.name)
+                    .join(", ")}
                 </span>
               )}
             </div>
