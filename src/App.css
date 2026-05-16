@@ -441,6 +441,7 @@ body {
   text-align: center;
   font-size: 11px;
   color: var(--color-text-tertiary, #aaa);
+  word-break: break-word;
 }
 
 /* Bars */
