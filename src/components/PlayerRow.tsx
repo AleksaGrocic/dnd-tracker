@@ -30,14 +30,6 @@ interface Props {
   onReorderCharacters: (characters: Character[]) => Promise<void>;
 }
 
-function hpColor(char: Character) {
-  const pct = char.hp_current / char.hp_max;
-
-  if (pct > 0.5) return "var(--color-text-success)";
-  if (pct > 0.25) return "var(--color-text-warning)";
-  return "var(--color-text-danger)";
-}
-
 function formatConditions(char: Character) {
   return char.conditions
     .map((c) =>
@@ -48,23 +40,20 @@ function formatConditions(char: Character) {
     .join(", ");
 }
 
-function statusStyles(
-  value: number,
-  thresholds: [number, number],
-  colors: [string, string, string],
-) {
-  const [high, mid] = thresholds;
-  const [good, warn, danger] = colors;
-
-  const color = value > high ? good : value > mid ? warn : danger;
-
+function hpPillStyle(char: Character) {
+  const pct = char.hp_current / char.hp_max;
   return {
-    background:
-      color === good ? "#dcfce7" : color === warn ? "#fef9c3" : "#fee2e2",
-    color: color === good ? "#166534" : color === warn ? "#854d0e" : "#991b1b",
-    border: `0.5px solid ${
-      color === good ? "#86efac" : color === warn ? "#fde047" : "#fca5a5"
-    }`,
+    background: pct > 0.5 ? "#dcfce7" : pct > 0.25 ? "#fef9c3" : "#fee2e2",
+    color: pct > 0.5 ? "#166534" : pct > 0.25 ? "#854d0e" : "#991b1b",
+    border: `0.5px solid ${pct > 0.5 ? "#86efac" : pct > 0.25 ? "#fde047" : "#fca5a5"}`,
+  };
+}
+
+function stressPillStyle(stress: number) {
+  return {
+    background: stress < 100 ? "#dcfce7" : stress < 150 ? "#fef9c3" : "#fee2e2",
+    color: stress < 100 ? "#166534" : stress < 150 ? "#854d0e" : "#991b1b",
+    border: `0.5px solid ${stress < 100 ? "#86efac" : stress < 150 ? "#fde047" : "#fca5a5"}`,
   };
 }
 
@@ -106,11 +95,26 @@ function SortableCharRow({
 
       <div className={`char-info ${isActive ? "active" : ""}`} onClick={onEdit}>
         <span className="char-name">{char.name}</span>
-
-        <span style={{ color: hpColor(char), fontSize: 13 }}>
+        <span className="summary-pill" style={hpPillStyle(char)}>
           {char.hp_current}/{char.hp_max} HP
         </span>
-
+        {char.temp_hp > 0 && (
+          <span
+            className="summary-pill"
+            style={{
+              background: "#dbeafe",
+              color: "#1e40af",
+              border: "0.5px solid #93c5fd",
+            }}
+          >
+            +{char.temp_hp} THP
+          </span>
+        )}
+        {char.stress > 0 && (
+          <span className="summary-pill" style={stressPillStyle(char.stress)}>
+            {char.stress} Stress
+          </span>
+        )}
         {char.conditions.length > 0 && (
           <span className="condition-pill">{formatConditions(char)}</span>
         )}
@@ -121,7 +125,7 @@ function SortableCharRow({
           <div className="spinner" />
         ) : (
           <button
-            className="edit-btn"
+            className="edit-btn select-btn"
             onClick={(e) => {
               e.stopPropagation();
               onSelect();
@@ -148,10 +152,8 @@ export default function PlayerRow({
 }: Props) {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
-
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState(player.name);
-
   const [selectingCharId, setSelectingCharId] = useState<string | null>(null);
 
   const activeChar = characters.find(
@@ -177,22 +179,21 @@ export default function PlayerRow({
       const timeout = setTimeout(() => {
         setEditingName(false);
         setEditName(player.name);
+        setAdding(false);
+        setNewName("");
       }, 0);
-
       return () => clearTimeout(timeout);
     }
   }, [isExpanded, player.name]);
 
   async function handleRename() {
     if (!editName.trim()) return;
-
     await onRenamePlayer(editName.trim());
     setEditingName(false);
   }
 
   async function handleAdd() {
     if (!newName.trim()) return;
-
     await onAddCharacter(newName.trim());
     setNewName("");
     setAdding(false);
@@ -200,23 +201,13 @@ export default function PlayerRow({
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-
     if (!over || active.id === over.id) return;
-
     const oldIndex = characters.findIndex((c) => c.id === active.id);
     const newIndex = characters.findIndex((c) => c.id === over.id);
-
     const reordered = [...characters];
     const [moved] = reordered.splice(oldIndex, 1);
-
     reordered.splice(newIndex, 0, moved);
-
-    onReorderCharacters(
-      reordered.map((c, position) => ({
-        ...c,
-        position,
-      })),
-    );
+    onReorderCharacters(reordered.map((c, position) => ({ ...c, position })));
   }
 
   return (
@@ -235,7 +226,6 @@ export default function PlayerRow({
               onChange={(e) => setEditName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleRename();
-
                 if (e.key === "Escape") {
                   setEditingName(false);
                   setEditName(player.name);
@@ -247,54 +237,52 @@ export default function PlayerRow({
           )}
         </div>
 
-        {!isExpanded && activeChar && (
-          <div className="player-char-summary">
-            <span className="char-name-small">{activeChar.name}</span>
-
-            <span
-              className="summary-pill"
-              style={statusStyles(
-                activeChar.hp_current / activeChar.hp_max,
-                [0.5, 0.25],
-                ["good", "warn", "danger"],
+        {!isExpanded &&
+          (activeChar ? (
+            <div className="player-char-summary">
+              <span className="char-name">{activeChar.name}</span>
+              <span className="summary-pill" style={hpPillStyle(activeChar)}>
+                {activeChar.hp_current}/{activeChar.hp_max} HP
+              </span>
+              {activeChar.temp_hp > 0 && (
+                <span
+                  className="summary-pill"
+                  style={{
+                    background: "#dbeafe",
+                    color: "#1e40af",
+                    border: "0.5px solid #93c5fd",
+                  }}
+                >
+                  +{activeChar.temp_hp} THP
+                </span>
               )}
-            >
-              {activeChar.hp_current}/{activeChar.hp_max} HP
-            </span>
-
-            {activeChar.temp_hp > 0 && (
+              {activeChar.stress > 0 && (
+                <span
+                  className="summary-pill"
+                  style={stressPillStyle(activeChar.stress)}
+                >
+                  {activeChar.stress} Stress
+                </span>
+              )}
+              {activeChar.conditions.length > 0 && (
+                <span className="condition-pill">
+                  {formatConditions(activeChar)}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="player-char-summary">
               <span
-                className="summary-pill"
                 style={{
-                  background: "#dbeafe",
-                  color: "#1e40af",
-                  border: "0.5px solid #93c5fd",
+                  color: "var(--color-text-tertiary, #aaa)",
+                  fontSize: 12,
+                  fontStyle: "italic",
                 }}
               >
-                +{activeChar.temp_hp} THP
+                No character selected
               </span>
-            )}
-
-            {activeChar.stress > 0 && (
-              <span
-                className="summary-pill"
-                style={statusStyles(
-                  activeChar.stress,
-                  [100, 150],
-                  ["good", "warn", "danger"],
-                )}
-              >
-                {activeChar.stress} Stress
-              </span>
-            )}
-
-            {activeChar.conditions.length > 0 && (
-              <span className="condition-pill">
-                {formatConditions(activeChar)}
-              </span>
-            )}
-          </div>
-        )}
+            </div>
+          ))}
 
         <div className="player-header-right">
           {isExpanded &&
@@ -309,7 +297,6 @@ export default function PlayerRow({
                 >
                   Save
                 </button>
-
                 <button
                   className="edit-btn"
                   onClick={(e) => {
@@ -332,7 +319,6 @@ export default function PlayerRow({
                 >
                   Edit
                 </button>
-
                 <button
                   className="delete-btn"
                   onClick={(e) => {
@@ -344,7 +330,6 @@ export default function PlayerRow({
                 </button>
               </>
             ))}
-
           <span className="chevron">{isExpanded ? "▲" : "▼"}</span>
         </div>
       </div>
@@ -389,9 +374,7 @@ export default function PlayerRow({
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAdd()}
               />
-
               <button onClick={handleAdd}>Add</button>
-
               <button onClick={() => setAdding(false)}>Cancel</button>
             </div>
           ) : (

@@ -43,12 +43,6 @@ function conditionLabel(name: string, count: number) {
     : name;
 }
 
-function progressColor(value: number, high: number, mid: number) {
-  if (value > high) return "#4ade80";
-  if (value > mid) return "#facc15";
-  return "#f87171";
-}
-
 export default function CharacterDetail({
   character,
   playerName,
@@ -58,18 +52,25 @@ export default function CharacterDetail({
 }: Props) {
   const [hpFocus, setHpFocus] = useState<"current" | "max">("current");
   const [conditionsExpanded, setConditionsExpanded] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(character.name);
 
   const hpPct = clamp((character.hp_current / character.hp_max) * 100, 0, 100);
-
   const stressPct = clamp((character.stress / 200) * 100, 0, 100);
-
   const activeEffectNames = new Set(character.conditions.map((c) => c.name));
 
+  const hpBarColor =
+    hpPct > 50 ? "#4ade80" : hpPct > 25 ? "#facc15" : "#f87171";
+
+  const stressBarColor =
+    character.stress < 100
+      ? "#4ade80"
+      : character.stress < 150
+        ? "#facc15"
+        : "#f87171";
+
   function update(fields: Partial<Character>) {
-    onUpdate({
-      ...character,
-      ...fields,
-    });
+    onUpdate({ ...character, ...fields });
   }
 
   function adjustStat(
@@ -77,46 +78,24 @@ export default function CharacterDetail({
     delta: number,
   ) {
     let next = character[field] + delta;
-
-    if (field === "hp_current") {
-      next = Math.min(next, character.hp_max);
-    }
-
-    if (field === "hp_max") {
-      next = Math.max(next, 1);
-    }
-
-    if (field === "temp_hp") {
-      next = Math.max(next, 0);
-    }
-
-    if (field === "stress") {
-      next = clamp(next, 0, 200);
-    }
-
+    if (field === "hp_current") next = clamp(next, 0, character.hp_max);
+    if (field === "hp_max") next = Math.max(next, 1);
+    if (field === "temp_hp") next = Math.max(next, 0);
+    if (field === "stress") next = clamp(next, 0, 200);
     update({ [field]: next });
   }
 
   function addEffect(name: string) {
-    const existing = character.conditions.find(
-      (effect) => effect.name === name,
-    );
-
+    const existing = character.conditions.find((e) => e.name === name);
     if (!existing) {
-      update({
-        conditions: [...character.conditions, { name, count: 1 }],
-      });
-
+      update({ conditions: [...character.conditions, { name, count: 1 }] });
       return;
     }
-
     const max = MAX_STACKS[name];
-
     if (max && existing.count >= max) return;
-
     update({
-      conditions: character.conditions.map((effect) =>
-        effect.name === name ? { ...effect, count: effect.count + 1 } : effect,
+      conditions: character.conditions.map((e) =>
+        e.name === name ? { ...e, count: e.count + 1 } : e,
       ),
     });
   }
@@ -124,27 +103,19 @@ export default function CharacterDetail({
   function adjustEffect(name: string, delta: number) {
     update({
       conditions: character.conditions
-        .map((effect) => {
-          if (effect.name !== name) return effect;
-
-          const next = effect.count + delta;
-
-          if (MAX_STACKS[name] && next > MAX_STACKS[name]) {
-            return effect;
-          }
-
-          return {
-            ...effect,
-            count: next,
-          };
+        .map((e) => {
+          if (e.name !== name) return e;
+          const next = e.count + delta;
+          if (MAX_STACKS[name] && next > MAX_STACKS[name]) return e;
+          return { ...e, count: next };
         })
-        .filter((effect) => effect.count > 0),
+        .filter((e) => e.count > 0),
     });
   }
 
   function removeEffect(name: string) {
     update({
-      conditions: character.conditions.filter((effect) => effect.name !== name),
+      conditions: character.conditions.filter((e) => e.name !== name),
     });
   }
 
@@ -154,13 +125,70 @@ export default function CharacterDetail({
         <button className="back-btn" onClick={onBack}>
           ← Back
         </button>
-
         <div style={{ textAlign: "center" }}>
           <div className="detail-player-name">{playerName}</div>
-
-          <h1 className="detail-name">{character.name}</h1>
+          {editingName ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                justifyContent: "center",
+              }}
+            >
+              <input
+                autoFocus
+                className="name-edit-input"
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    update({ name: editedName.trim() || character.name });
+                    setEditingName(false);
+                  }
+                  if (e.key === "Escape") {
+                    setEditedName(character.name);
+                    setEditingName(false);
+                  }
+                }}
+              />
+              <button
+                className="edit-btn"
+                onClick={() => {
+                  update({ name: editedName.trim() || character.name });
+                  setEditingName(false);
+                }}
+              >
+                Save
+              </button>
+              <button
+                className="edit-btn"
+                onClick={() => {
+                  setEditedName(character.name);
+                  setEditingName(false);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <h1
+              className="detail-name"
+              onClick={() => setEditingName(true)}
+              style={{ cursor: "pointer" }}
+            >
+              {character.name}{" "}
+              <span
+                style={{
+                  fontSize: 14,
+                  color: "var(--color-text-tertiary, #aaa)",
+                }}
+              >
+                ✎
+              </span>
+            </h1>
+          )}
         </div>
-
         <button
           className="delete-btn"
           style={{ marginLeft: "auto" }}
@@ -172,17 +200,12 @@ export default function CharacterDetail({
 
       <div className="stat-card">
         <div className="stat-label">Hit points</div>
-
         <div className="hp-bar-track">
           <div
             className="hp-bar-fill"
-            style={{
-              width: `${hpPct}%`,
-              background: progressColor(hpPct, 50, 25),
-            }}
+            style={{ width: `${hpPct}%`, background: hpBarColor }}
           />
         </div>
-
         <div className="stat-row">
           <button
             className="adj-btn"
@@ -199,43 +222,33 @@ export default function CharacterDetail({
           >
             −
           </button>
-
           <div className="stat-value-group">
             <input
               type="number"
               value={character.hp_current}
               readOnly={hpFocus !== "current"}
-              className={`stat-input ${
-                hpFocus === "current"
-                  ? "stat-input-active"
-                  : "stat-input-inactive"
-              }`}
+              className={`stat-input ${hpFocus === "current" ? "stat-input-active" : "stat-input-inactive"}`}
               onClick={() => setHpFocus("current")}
               onChange={(e) =>
                 update({
-                  hp_current: Number(e.target.value),
+                  hp_current: clamp(
+                    Number(e.target.value),
+                    0,
+                    character.hp_max,
+                  ),
                 })
               }
             />
-
             <span className="stat-divider">/</span>
-
             <input
               type="number"
               value={character.hp_max}
               readOnly={hpFocus !== "max"}
-              className={`stat-input ${
-                hpFocus === "max" ? "stat-input-active" : "stat-input-inactive"
-              }`}
+              className={`stat-input ${hpFocus === "max" ? "stat-input-active" : "stat-input-inactive"}`}
               onClick={() => setHpFocus("max")}
-              onChange={(e) =>
-                update({
-                  hp_max: Number(e.target.value),
-                })
-              }
+              onChange={(e) => update({ hp_max: Number(e.target.value) })}
             />
           </div>
-
           <button
             className="adj-btn"
             onClick={() =>
@@ -252,7 +265,6 @@ export default function CharacterDetail({
             +
           </button>
         </div>
-
         <div className="stat-hint">
           {hpFocus === "current" ? "editing current HP" : "editing max HP"} ·
           tap to switch
@@ -261,23 +273,22 @@ export default function CharacterDetail({
 
       <div className="stat-card">
         <div className="stat-label">Temporary HP</div>
-
         <div className="stat-row">
-          <button className="adj-btn" onClick={() => adjustStat("temp_hp", -1)}>
+          <button
+            className="adj-btn"
+            onClick={() => adjustStat("temp_hp", -1)}
+            style={{ color: character.temp_hp <= 0 ? "#ccc" : undefined }}
+          >
             −
           </button>
-
           <input
             type="number"
             className="stat-input"
             value={character.temp_hp}
             onChange={(e) =>
-              update({
-                temp_hp: Math.max(0, Number(e.target.value)),
-              })
+              update({ temp_hp: Math.max(0, Number(e.target.value)) })
             }
           />
-
           <button className="adj-btn" onClick={() => adjustStat("temp_hp", 1)}>
             +
           </button>
@@ -286,45 +297,32 @@ export default function CharacterDetail({
 
       <div className="stat-card">
         <div className="stat-label">Stress</div>
-
         <div className="hp-bar-track">
           <div
             className="hp-bar-fill"
-            style={{
-              width: `${stressPct}%`,
-              background: progressColor(200 - character.stress, 100, 50),
-            }}
+            style={{ width: `${stressPct}%`, background: stressBarColor }}
           />
         </div>
-
         <div className="stat-row">
           <button
             className="adj-btn"
-            style={{
-              color: character.stress <= 0 ? "#ccc" : undefined,
-            }}
             onClick={() => adjustStat("stress", -1)}
+            style={{ color: character.stress <= 0 ? "#ccc" : undefined }}
           >
             −
           </button>
-
           <input
             type="number"
             className="stat-input"
             value={character.stress}
             onChange={(e) =>
-              update({
-                stress: Math.max(0, Number(e.target.value)),
-              })
+              update({ stress: clamp(Number(e.target.value), 0, 200) })
             }
           />
-
           <button
             className="adj-btn"
-            style={{
-              color: character.stress >= 200 ? "#ccc" : undefined,
-            }}
             onClick={() => adjustStat("stress", 1)}
+            style={{ color: character.stress >= 200 ? "#ccc" : undefined }}
           >
             +
           </button>
@@ -337,16 +335,10 @@ export default function CharacterDetail({
           onClick={() => setConditionsExpanded((prev) => !prev)}
         >
           <span className="stat-label">Conditions</span>
-
           {!conditionsExpanded &&
             (character.conditions.length ? (
               <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 4,
-                }}
+                style={{ flex: 1, display: "flex", flexWrap: "wrap", gap: 4 }}
               >
                 {character.conditions.map((condition) => (
                   <span key={condition.name} className="condition-pill">
@@ -365,7 +357,6 @@ export default function CharacterDetail({
                 No conditions
               </span>
             ))}
-
           <span className="chevron">{conditionsExpanded ? "▲" : "▼"}</span>
         </div>
 
@@ -376,7 +367,6 @@ export default function CharacterDetail({
                 {character.conditions.map((effect) => (
                   <div key={effect.name} className="effect-row">
                     <span className="effect-name">{effect.name}</span>
-
                     <div className="effect-controls">
                       {(effect.name === "Exhausted" ||
                         effect.name === "Diseased") && (
@@ -390,9 +380,7 @@ export default function CharacterDetail({
                           >
                             −
                           </button>
-
                           <span className="effect-count">×{effect.count}</span>
-
                           <button
                             className="adj-btn small"
                             style={{
@@ -408,7 +396,6 @@ export default function CharacterDetail({
                           </button>
                         </>
                       )}
-
                       <button
                         className="remove-btn"
                         onClick={() => removeEffect(effect.name)}
@@ -420,19 +407,18 @@ export default function CharacterDetail({
                 ))}
               </div>
             )}
-
             <div className="effect-presets">
-              {PRESET_EFFECTS.filter(
-                (effect) => !activeEffectNames.has(effect),
-              ).map((effect) => (
-                <button
-                  key={effect}
-                  className="preset-btn"
-                  onClick={() => addEffect(effect)}
-                >
-                  + {effect}
-                </button>
-              ))}
+              {PRESET_EFFECTS.filter((e) => !activeEffectNames.has(e)).map(
+                (effect) => (
+                  <button
+                    key={effect}
+                    className="preset-btn"
+                    onClick={() => addEffect(effect)}
+                  >
+                    + {effect}
+                  </button>
+                ),
+              )}
             </div>
           </>
         )}
